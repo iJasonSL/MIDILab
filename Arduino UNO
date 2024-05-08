@@ -1,0 +1,228 @@
+//Hecho por Jason Sornio Lazo y Andres Felipe Galindez
+
+#include "DFRobot_UI.h"
+#include "Arduino.h"
+#include "DFRobot_GDL.h"
+#include "DFRobot_Touch.h"
+
+
+#define TFT_DC  8
+#define TFT_CS  10
+#define TFT_RST 9
+
+
+int16_t modulator;
+const int nBotones = 3; // Ahora hay 8 botones en total
+const int calibracion = 80; //este valor funciona como una especie de delay
+boolean notaioff[nBotones];
+int contador[nBotones];
+byte notas[] = {34, 36, 39, 43, 48, 50, 53, 57}; // Ahora hay 8 notas para 8 botones
+
+
+
+
+const int nPots = 4; //número de potenciómetros
+int lecturas[nPots];
+int lecturasAnteriores[nPots];
+boolean estadoAnterior[nBotones] = {HIGH, HIGH, HIGH};
+
+
+DFRobot_ILI9488_320x480_HW_SPI screen(TFT_DC, TFT_CS, TFT_RST);
+
+
+int potPin = A0; // Pin analógico para el potenciómetro
+int potPin2 = A1;
+int potPin3 = A2;
+int potPin4 = A3;
+int potPin5 = A4;
+int lastPotValue = -1; // Último valor del potenciómetro leído, inicializado a -1 para forzar la primera actualización
+int lastPotValue2 = -1;
+int lastPotValue3 = -1;
+int lastPotValue4 = -1;
+int lastPotValue5 = -1;
+
+
+void setup() {
+  pinMode(potPin, INPUT); // Configura el pin del potenciómetro como entrada
+  pinMode(potPin2, INPUT);
+  pinMode(potPin3, INPUT);
+  pinMode(potPin4, INPUT);
+  pinMode(potPin5, INPUT);
+  Serial.begin(115200);
+  screen.begin();
+  screen.fillScreen(COLOR_RGB565_BLACK); // Limpia la pantalla al inicio
+  screen.setTextColor(COLOR_RGB565_WHITE); // Color del texto
+  for (int i = 0; i < nBotones; i++) {
+    pinMode(i + 2, INPUT_PULLUP);
+}
+}
+
+
+void loop() {
+  for (int i = 0; i < nBotones; i++) {
+    boolean estadoBoton = digitalRead(i + 2); // Leer estado actual del botón
+   
+    if (estadoBoton != estadoAnterior[i]) { // Verificar si el estado ha cambiado
+      estadoAnterior[i] = estadoBoton; // Actualizar estado anterior
+     
+      if (estadoBoton == LOW) { // Botón presionado
+        // Si la nota está apagada, enciéndela
+        if (notaioff[i]) {
+          contador[i] = calibracion;
+          midi(144, notas[i], 100);
+          notaioff[i] = false;
+        }
+      } else { // Botón no presionado
+        // Si la nota está encendida, apágala
+        if (!notaioff[i]) {
+          contador[i] = calibracion;
+          midi(128, notas[i], 0);
+          notaioff[i] = true;
+        }
+      }
+    }
+  }
+ 
+  for (int i = 0; i < nBotones; i++) {
+    if (contador[i] > 0) contador[i]--;
+  }
+
+
+
+
+  for (int k = 0; k < nPots; k++) {
+    lecturas[k] = map(analogRead(k), 0, 1023, 0, 255);
+  }
+
+
+
+
+  for (int k = 0; k < nPots; k++) {
+    if (lecturas[k] > (lecturasAnteriores[k] + 1) || lecturas[k] < (lecturasAnteriores[k] - 1)) {
+      midi(176, k + 30, lecturas[k] / 2);
+      lecturasAnteriores[k] = lecturas[k];
+    }
+  }
+
+
+  // Lee el valor analógico de los potenciómetros y mapea el rango de 0 a 1023 a 0 a 127
+  int potValue = map(analogRead(potPin), 0, 1023, 0, 128);
+  int potValue2 = map(analogRead(potPin2), 0, 1023, 0, 128);
+  int potValue3 = map(analogRead(potPin3), 0, 1023, 0, 128);
+  int potValue4 = map(analogRead(potPin4), 0, 1023, 0, 128);
+  int potValue5 = map(analogRead(potPin5), 0, 1023, 0, 128);
+  // Actualiza el valor del primer potenciómetro si ha cambiado desde la última lectura
+  if (potValue != lastPotValue) {
+    // Borra completamente el área donde se muestra el valor anterior del potenciómetro 1
+    screen.fillRect(0, 50, 200, 50, COLOR_RGB565_BLACK);
+
+
+    lastPotValue = potValue; // Actualiza el último valor del potenciómetro leído
+    // Configura el color del texto de "POT 1" en rojo y el valor en blanco
+    screen.setTextColor(COLOR_RGB565_RED);
+    // Imprime el texto de "POT 1"
+    screen.setCursor(0, 15);
+    screen.setTextSize(4);
+    screen.print("POT 1:");
+    // Configura el color del valor en blanco
+    screen.setTextColor(COLOR_RGB565_WHITE);
+    // Imprime el nuevo valor del potenciómetro 1
+    screen.setCursor(0, 50);
+    screen.setTextSize(7);
+    screen.print(potValue);
+  }
+
+
+  // Actualiza el valor del segundo potenciómetro si ha cambiado desde la última lectura
+  if (potValue2 != lastPotValue2) {
+    // Borra completamente el área donde se muestra el valor anterior del potenciómetro 2
+    screen.fillRect(0, 140, 200, 50, COLOR_RGB565_BLACK);
+
+
+    lastPotValue2 = potValue2; // Actualiza el último valor del potenciómetro leído
+    // Configura el color del texto de "POT 2" en rojo y el valor en blanco
+    screen.setTextColor(COLOR_RGB565_RED);
+    // Imprime el texto de "POT 2"
+    screen.setCursor(0, 105);
+    screen.setTextSize(4);
+    screen.print("POT 2:");
+    // Configura el color del valor en blanco
+    screen.setTextColor(COLOR_RGB565_WHITE);
+    // Imprime el nuevo valor del potenciómetro 2
+    screen.setCursor(0, 140);
+    screen.setTextSize(7);
+    screen.print(potValue2);
+  }
+
+
+  // Actualiza el valor del tercer potenciómetro si ha cambiado desde la última lectura
+  if (potValue3 != lastPotValue3) {
+    // Borra completamente el área donde se muestra el valor anterior del potenciómetro 3
+    screen.fillRect(0, 230, 200, 50, COLOR_RGB565_BLACK);
+
+
+    lastPotValue3 = potValue3; // Actualiza el último valor del potenciómetro leído
+    // Configura el color del texto de "POT 3" en rojo y el valor en blanco
+    screen.setTextColor(COLOR_RGB565_RED);
+    // Imprime el texto de "POT 3"
+    screen.setCursor(0, 195);
+    screen.setTextSize(4);
+    screen.print("POT 3:");
+    // Configura el color del valor en blanco
+    screen.setTextColor(COLOR_RGB565_WHITE);
+    // Imprime el nuevo valor del potenciómetro 3
+    screen.setCursor(0, 230);
+    screen.setTextSize(7);
+    screen.print(potValue3);
+  }
+
+
+  // Actualiza el valor del cuarto potenciómetro si ha cambiado desde la última lectura
+  if (potValue4 != lastPotValue4) {
+    // Borra completamente el área donde se muestra el valor anterior del potenciómetro 4
+    screen.fillRect(0, 320, 200, 50, COLOR_RGB565_BLACK);
+
+
+    lastPotValue4 = potValue4; // Actualiza el último valor del potenciómetro leído
+    // Configura el color del texto de "POT 4" en rojo y el valor en blanco
+    screen.setTextColor(COLOR_RGB565_RED);
+    // Imprime el texto de "POT 4"
+    screen.setCursor(0, 285);
+    screen.setTextSize(4);
+    screen.print("POT 4:");
+    // Configura el color del valor en blanco
+    screen.setTextColor(COLOR_RGB565_WHITE);
+    // Imprime el nuevo valor del potenciómetro 4
+    screen.setCursor(0, 320);
+    screen.setTextSize(7);
+    screen.print(potValue4);
+  }
+ 
+    if (potValue5 != lastPotValue5) {
+    // Borra completamente el área donde se muestra el valor anterior del potenciómetro 4
+    screen.fillRect(0, 410, 200, 50, COLOR_RGB565_BLACK);
+
+
+    lastPotValue5 = potValue5; // Actualiza el último valor del potenciómetro leído
+    // Configura el color del texto de "POT 5" en rojo y el valor en blanco
+    screen.setTextColor(COLOR_RGB565_RED);
+    // Imprime el texto de "POT 5"
+    screen.setCursor(0, 375);
+    screen.setTextSize(4);
+    screen.print("POT 5:");
+    // Configura el color del valor en blanco
+    screen.setTextColor(COLOR_RGB565_WHITE);
+    // Imprime el nuevo valor del potenciómetro 5
+    screen.setCursor(0, 410);
+    screen.setTextSize(7);
+    screen.print(potValue5);
+  }
+  delay(100); // Pequeño retraso para evitar que la pantalla se actualice demasiado rápido
+}
+
+
+void midi(unsigned char command, unsigned char note, unsigned char vel) {
+  Serial.write(command);
+  Serial.write(note);
+  Serial.write(vel);
+}
